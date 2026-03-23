@@ -39,7 +39,7 @@ resizeCanvas();
 const config = {
     SIM_RESOLUTION: 128,
     DYE_RESOLUTION: 1024,
-    DENSITY_DISSIPATION: 0.7,
+    DENSITY_DISSIPATION: 0.55,
     VELOCITY_DISSIPATION: 1.5,
     PRESSURE: 0.8,
     PRESSURE_ITERATIONS: 20,
@@ -401,7 +401,9 @@ const displayShaderSource = `
     varying vec2 vUv;
     uniform sampler2D uTexture;
     uniform sampler2D uBaseImage;
+    uniform sampler2D uBaseImage2;
     uniform sampler2D uRevealImage;
+    uniform float uBaseFade;
     uniform vec2 uMouse;
     uniform float uTime;
     void main () {
@@ -412,7 +414,9 @@ const displayShaderSource = `
         vec2 centered = rawUv - 0.5;
         float dist = length(centered);
         vec2 imgUv = 0.5 + centered * (1.0 + 1.5 * dist * dist);
-        vec3 base = texture2D(uBaseImage, imgUv).rgb;
+        vec3 base1 = texture2D(uBaseImage, imgUv).rgb;
+        vec3 base2 = texture2D(uBaseImage2, imgUv).rgb;
+        vec3 base = mix(base1, base2, uBaseFade);
 
         float t = uTime;
         vec2 revealUv = imgUv;
@@ -561,7 +565,13 @@ function loadImageTexture (url) {
 }
 
 let baseImageTexture = loadImageTexture('ball.jpg');
+let baseImage2Texture = loadImageTexture('make2.jpg');
 let revealImageTexture = loadImageTexture('hire.jpg');
+
+// Base image crossfade — starts when user first interacts, takes 10 seconds
+let baseFade = 0;
+let hasInteracted = false;
+let interactionTime = 0;
 
 // ---- INIT ----
 displayMaterial.setKeywords([]);
@@ -575,6 +585,15 @@ update();
 function update () {
     const dt = calcDeltaTime();
     if (resizeCanvas()) initFramebuffers();
+
+    // Slowly fade base image 3 seconds after first interaction
+    if (hasInteracted && baseFade < 1.0) {
+        let elapsed = (Date.now() - interactionTime) / 1000;
+        if (elapsed > 3.0) {
+            baseFade += 0.016 / 10.0;
+            if (baseFade > 1.0) baseFade = 1.0;
+        }
+    }
 
     applyInputs();
     if (!config.PAUSED) step(dt);
@@ -684,7 +703,9 @@ function render (target) {
     displayMaterial.bind();
     gl.uniform1i(displayMaterial.uniforms.uTexture, dye.read.attach(0));
     gl.uniform1i(displayMaterial.uniforms.uBaseImage, baseImageTexture.attach(1));
+    gl.uniform1i(displayMaterial.uniforms.uBaseImage2, baseImage2Texture.attach(3));
     gl.uniform1i(displayMaterial.uniforms.uRevealImage, revealImageTexture.attach(2));
+    gl.uniform1f(displayMaterial.uniforms.uBaseFade, baseFade);
     gl.uniform2f(displayMaterial.uniforms.uMouse, smoothMouseX, smoothMouseY);
     gl.uniform1f(displayMaterial.uniforms.uTime, elapsedTime);
     blit(target);
@@ -694,6 +715,7 @@ function splatPointer (pointer) {
     let dx = pointer.deltaX * config.SPLAT_FORCE;
     let dy = pointer.deltaY * config.SPLAT_FORCE;
     splat(pointer.texcoordX, pointer.texcoordY, dx, dy, pointer.color);
+    if (!hasInteracted) { hasInteracted = true; interactionTime = Date.now(); }
 }
 
 function multipleSplats (amount) {

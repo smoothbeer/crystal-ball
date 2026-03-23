@@ -572,6 +572,8 @@ let revealImageTexture = loadImageTexture('hire.jpg');
 let baseFade = 0;
 let hasInteracted = false;
 let interactionTime = 0;
+let pageLoadTime = Date.now();
+let inputEnabled = false;
 
 // ---- INIT ----
 displayMaterial.setKeywords([]);
@@ -712,6 +714,11 @@ function render (target) {
 }
 
 function splatPointer (pointer) {
+    // Ignore input for first 1.5 seconds so cursor can settle
+    if (!inputEnabled) {
+        if (Date.now() - pageLoadTime > 1500) inputEnabled = true;
+        else return;
+    }
     let dx = pointer.deltaX * config.SPLAT_FORCE;
     let dy = pointer.deltaY * config.SPLAT_FORCE;
     splat(pointer.texcoordX, pointer.texcoordY, dx, dy, pointer.color);
